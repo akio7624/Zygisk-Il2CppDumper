@@ -261,7 +261,28 @@ std::string dump_field(Il2CppClass *klass) {
         }
         auto field_type = il2cpp_field_get_type(field);
         auto field_class = il2cpp_class_from_type(field_type);
-        outPut << il2cpp_class_get_name(field_class) << " " << il2cpp_field_get_name(field);
+
+        // https://github.com/Perfare/Zygisk-Il2CppDumper/issues/172#issuecomment-1861730399
+        if(field_class->generic_class) {
+            std::string class_name(il2cpp_class_get_name(field_class));
+            outPut << split_and_0(class_name) << "<";
+
+            const Il2CppGenericInst *inst = field_class->generic_class->context.class_inst;
+            for (size_t generic_id = 0; generic_id < inst->type_argc; generic_id++) {
+                outPut << il2cpp_type_get_name(inst->type_argv[generic_id]);
+
+                if (generic_id == inst->type_argc - 1) {  // if last cycle
+                    outPut  << ">";
+                } else {
+                    outPut << ", ";
+                }
+            }
+
+            outPut << " " << il2cpp_field_get_name(field);
+        } else {
+            outPut << il2cpp_class_get_name(field_class) << " " << il2cpp_field_get_name(field);
+        }
+
         //TODO 获取构造函数初始化后的字段值
         if (attrs & FIELD_ATTRIBUTE_LITERAL && is_enum) {
             uint64_t val = 0;
