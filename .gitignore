@@ -12,3 +12,5 @@
 /out
 .externalNativeBuild
 .cxx
+
+module/src/main/cpp/game.h
