@@ -155,6 +155,15 @@ std::string dump_method(Il2CppClass *klass) {
     return outPut.str();
 }
 
+std::string split_and_0(std::string str) {
+    size_t pos = str.find('`');
+    if (pos != std::string::npos) {
+        return str.substr(0, pos);
+    }
+
+    return str;
+}
+
 std::string dump_property(Il2CppClass *klass) {
     std::stringstream outPut;
     outPut << "\n\t// Properties\n";
@@ -177,7 +186,25 @@ std::string dump_property(Il2CppClass *klass) {
             prop_class = il2cpp_class_from_type(param);
         }
         if (prop_class) {
-            outPut << il2cpp_class_get_name(prop_class) << " " << prop_name << " { ";
+            // https://github.com/Perfare/Zygisk-Il2CppDumper/issues/172#issuecomment-1861730399
+            if(prop_class->generic_class) {
+                std::string class_name(il2cpp_class_get_name(prop_class));
+                outPut << split_and_0(class_name) << "<";
+
+                const Il2CppGenericInst *inst = prop_class->generic_class->context.class_inst;
+                for (size_t generic_id = 0; generic_id < inst->type_argc; generic_id++) {
+                    outPut << il2cpp_type_get_name(inst->type_argv[generic_id]);
+
+                    if (generic_id == inst->type_argc - 1) {  // if last cycle
+                        outPut  << ">";
+                    } else {
+                        outPut << ", ";
+                    }
+                }
+                outPut << " " << prop_name << " { ";
+            } else {
+                outPut << il2cpp_class_get_name(prop_class) << " " << prop_name << " { ";
+            }
             if (get) {
                 outPut << "get; ";
             }
@@ -339,6 +366,9 @@ void il2cpp_api_init(void *handle) {
         LOGI("Waiting for il2cpp_init...");
         sleep(1);
     }
+    LOGI("Waiting for 5 seconds for full initialization...");
+    sleep(5);
+    LOGI("Trying attach...");
     auto domain = il2cpp_domain_get();
     il2cpp_thread_attach(domain);
 }
