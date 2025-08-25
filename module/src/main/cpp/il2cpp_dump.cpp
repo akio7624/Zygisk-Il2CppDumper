@@ -120,7 +120,19 @@ std::string make_class_type_name(Il2CppClass *klass) {
             }
         }
     } else {
-        result << class_name;
+        size_t backtickPos = class_name.find('`');
+        if (backtickPos == std::string::npos) {
+            result << class_name;
+        } else {
+            result << class_name.substr(0, backtickPos);
+            size_t number = std::stoi(class_name.substr(backtickPos + 1));
+
+            result << "<T";
+            for (size_t i = 1; i < number; ++i) {
+                result << ", T";
+            }
+            result << ">";
+        }
     }
 
     return result.str();
