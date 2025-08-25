@@ -331,18 +331,18 @@ std::string dump_type(const Il2CppType *type) {
     } else {
         outPut << "class ";
     }
-    outPut << il2cpp_class_get_name(klass); //TODO genericContainerIndex
+    outPut << make_class_type_name(klass); //TODO genericContainerIndex
     std::vector<std::string> extends;
     auto parent = il2cpp_class_get_parent(klass);
     if (!is_valuetype && !is_enum && parent) {
         auto parent_type = il2cpp_class_get_type(parent);
         if (parent_type->type != IL2CPP_TYPE_OBJECT) {
-            extends.emplace_back(il2cpp_class_get_name(parent));
+            extends.emplace_back(make_class_type_name(parent));
         }
     }
     void *iter = nullptr;
     while (auto itf = il2cpp_class_get_interfaces(klass, &iter)) {
-        extends.emplace_back(il2cpp_class_get_name(itf));
+        extends.emplace_back(make_class_type_name(itf));
     }
     if (!extends.empty()) {
         outPut << " : " << extends[0];
