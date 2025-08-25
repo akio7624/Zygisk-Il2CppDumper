@@ -92,6 +92,40 @@ bool _il2cpp_type_is_byref(const Il2CppType *type) {
     return byref;
 }
 
+// fix generic class name  ex) List`1 -> List
+std::string split_and_0(std::string str) {
+    size_t pos = str.find('`');
+    if (pos != std::string::npos) {
+        return str.substr(0, pos);
+    }
+
+    return str;
+}
+
+std::string make_class_type_name(Il2CppClass *klass) {
+    std::stringstream result;
+    const std::string class_name = il2cpp_class_get_name(klass);
+
+    if(klass->generic_class) {
+        const std::string real_name = split_and_0(class_name);  // remove text like `1
+        result << real_name << "<";
+
+        const Il2CppGenericInst *inst = klass->generic_class->context.class_inst;
+        for (size_t generic_id = 0; generic_id < inst->type_argc; generic_id++) {
+            result << il2cpp_type_get_name(inst->type_argv[generic_id]);
+            if (generic_id == inst->type_argc - 1) {  // if last cycle
+                result  << ">";
+            } else {
+                result << ", ";
+            }
+        }
+    } else {
+        result << class_name;
+    }
+
+    return result.str();
+}
+
 std::string dump_method(Il2CppClass *klass) {
     std::stringstream outPut;
     outPut << "\n\t// Methods\n";
@@ -119,7 +153,7 @@ std::string dump_method(Il2CppClass *klass) {
             outPut << "ref ";
         }
         auto return_class = il2cpp_class_from_type(return_type);
-        outPut << il2cpp_class_get_name(return_class) << " " << il2cpp_method_get_name(method)
+        outPut << make_class_type_name(return_class) << " " << il2cpp_method_get_name(method)
                << "(";
         auto param_count = il2cpp_method_get_param_count(method);
         for (int i = 0; i < param_count; ++i) {
@@ -142,7 +176,7 @@ std::string dump_method(Il2CppClass *klass) {
                 }
             }
             auto parameter_class = il2cpp_class_from_type(param);
-            outPut << il2cpp_class_get_name(parameter_class) << " "
+            outPut << make_class_type_name(parameter_class) << " "
                    << il2cpp_method_get_param_name(method, i);
             outPut << ", ";
         }
@@ -153,15 +187,6 @@ std::string dump_method(Il2CppClass *klass) {
         //TODO GenericInstMethod
     }
     return outPut.str();
-}
-
-std::string split_and_0(std::string str) {
-    size_t pos = str.find('`');
-    if (pos != std::string::npos) {
-        return str.substr(0, pos);
-    }
-
-    return str;
 }
 
 std::string dump_property(Il2CppClass *klass) {
@@ -186,25 +211,8 @@ std::string dump_property(Il2CppClass *klass) {
             prop_class = il2cpp_class_from_type(param);
         }
         if (prop_class) {
-            // https://github.com/Perfare/Zygisk-Il2CppDumper/issues/172#issuecomment-1861730399
-            if(prop_class->generic_class) {
-                std::string class_name(il2cpp_class_get_name(prop_class));
-                outPut << split_and_0(class_name) << "<";
+            outPut << make_class_type_name(prop_class) << " " << prop_name << " { ";
 
-                const Il2CppGenericInst *inst = prop_class->generic_class->context.class_inst;
-                for (size_t generic_id = 0; generic_id < inst->type_argc; generic_id++) {
-                    outPut << il2cpp_type_get_name(inst->type_argv[generic_id]);
-
-                    if (generic_id == inst->type_argc - 1) {  // if last cycle
-                        outPut  << ">";
-                    } else {
-                        outPut << ", ";
-                    }
-                }
-                outPut << " " << prop_name << " { ";
-            } else {
-                outPut << il2cpp_class_get_name(prop_class) << " " << prop_name << " { ";
-            }
             if (get) {
                 outPut << "get; ";
             }
@@ -262,26 +270,7 @@ std::string dump_field(Il2CppClass *klass) {
         auto field_type = il2cpp_field_get_type(field);
         auto field_class = il2cpp_class_from_type(field_type);
 
-        // https://github.com/Perfare/Zygisk-Il2CppDumper/issues/172#issuecomment-1861730399
-        if(field_class->generic_class) {
-            std::string class_name(il2cpp_class_get_name(field_class));
-            outPut << split_and_0(class_name) << "<";
-
-            const Il2CppGenericInst *inst = field_class->generic_class->context.class_inst;
-            for (size_t generic_id = 0; generic_id < inst->type_argc; generic_id++) {
-                outPut << il2cpp_type_get_name(inst->type_argv[generic_id]);
-
-                if (generic_id == inst->type_argc - 1) {  // if last cycle
-                    outPut  << ">";
-                } else {
-                    outPut << ", ";
-                }
-            }
-
-            outPut << " " << il2cpp_field_get_name(field);
-        } else {
-            outPut << il2cpp_class_get_name(field_class) << " " << il2cpp_field_get_name(field);
-        }
+        outPut << make_class_type_name(field_class) << " " << il2cpp_field_get_name(field);
 
         //TODO 获取构造函数初始化后的字段值
         if (attrs & FIELD_ATTRIBUTE_LITERAL && is_enum) {
