@@ -7,6 +7,9 @@ Il2CppDumper with Zygisk, dump il2cpp data at runtime, can bypass protection, en
 * Fixed an issue where generic types appeared as ```SomeClass`1```, ```MyClass`2.```
 * Wait for an additional 5 seconds to ensure il2cpp is fully initialized and prevent crashes while retrieving type names.
 
+### TODO
+* [ ] fix `field_type(System.Byte[])` attribute field value
+
 ## How to use
 1. Install [Magisk](https://github.com/topjohnwu/Magisk) v24 or later and enable Zygisk
 2. Build module
