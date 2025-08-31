@@ -9,6 +9,7 @@ Il2CppDumper with Zygisk, dump il2cpp data at runtime, can bypass protection, en
 
 ### TODO
 * [ ] fix `field_type(System.Byte[])` attribute field value
+* [ ] add support field/method attributes - is it possible?
 
 ## How to use
 1. Install [Magisk](https://github.com/topjohnwu/Magisk) v24 or later and enable Zygisk

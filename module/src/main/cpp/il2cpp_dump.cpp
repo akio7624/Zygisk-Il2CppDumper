@@ -451,7 +451,17 @@ std::string dump_field(Il2CppClass *klass) {
 std::string dump_type(const Il2CppType *type) {
     std::stringstream outPut;
     auto *klass = il2cpp_class_from_type(type);
-    outPut << "\n// Namespace: " << il2cpp_class_get_namespace(klass) << "\n";
+//    outPut << "\n// Namespace: " << il2cpp_class_get_namespace(klass) << "\n";  // cannot get namespace of some enum
+
+    outPut << "\n// Namespace: ";
+    std::string ns(il2cpp_type_get_name(type));
+    size_t last_dot = ns.find_last_of('.');
+    if (last_dot != std::string::npos) {
+        outPut << ns.substr(0, last_dot) << "\n";
+    } else {
+        outPut << ns << "\n";
+    }
+
     auto flags = il2cpp_class_get_flags(klass);
     if (flags & TYPE_ATTRIBUTE_SERIALIZABLE) {
         outPut << "[Serializable]\n";
