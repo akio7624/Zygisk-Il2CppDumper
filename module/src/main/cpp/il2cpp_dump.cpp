@@ -92,6 +92,39 @@ bool _il2cpp_type_is_byref(const Il2CppType *type) {
     return byref;
 }
 
+
+// convert uint16_t array to utf-8 string
+std::string utf16_to_utf8(const uint16_t *utf16_str) {
+    std::u16string u16(reinterpret_cast<const char16_t *>(utf16_str));
+    std::string result;
+    result.reserve(u16.size());
+
+    for (char16_t c : u16) {
+        if (c == 0) break;
+        if (c <= 0x7F) {
+            result.push_back(static_cast<char>(c));
+        } else if (c <= 0x7FF) {
+            result.push_back(0xC0 | ((c >> 6) & 0x1F));
+            result.push_back(0x80 | (c & 0x3F));
+        } else {
+            result.push_back(0xE0 | ((c >> 12) & 0x0F));
+            result.push_back(0x80 | ((c >> 6) & 0x3F));
+            result.push_back(0x80 | (c & 0x3F));
+        }
+    }
+
+    return result;
+}
+
+// remove namespace:  xxx.yyy.MyClass -> MyClass
+std::string remove_namespace(const std::string& full_name) {
+    size_t last_dot_pos = full_name.find_last_of('.');
+    if (last_dot_pos != std::string::npos) {
+        return full_name.substr(last_dot_pos + 1);
+    }
+    return full_name;
+}
+
 // fix generic class name  ex) List`1 -> List
 std::string split_and_0(std::string str) {
     size_t pos = str.find('`');
@@ -101,6 +134,126 @@ std::string split_and_0(std::string str) {
 
     return str;
 }
+
+// get field value as string
+std::string get_attr_field_value_as_string(Il2CppObject* attr_obj, FieldInfo* field) {
+    const Il2CppType* field_type = il2cpp_field_get_type(field);
+    auto type_enum = (Il2CppTypeEnum) il2cpp_type_get_type(field_type);
+    std::string result;
+
+    switch (type_enum) {
+        case IL2CPP_TYPE_BOOLEAN: {
+            bool value = false;
+            il2cpp_field_get_value(attr_obj, field, &value);
+            return value ? "true" : "false";
+        }
+        case IL2CPP_TYPE_CHAR:
+        case IL2CPP_TYPE_STRING: {
+            auto *str_obj = (Il2CppString *) il2cpp_field_get_value_object(field, attr_obj);
+
+            if (str_obj) {
+                uint16_t *u16_string = il2cpp_string_chars(str_obj);
+                return '"' + utf16_to_utf8(u16_string) + '"';
+            } else {
+                return "null";
+            }
+        }
+        case IL2CPP_TYPE_I:
+        case IL2CPP_TYPE_I1:
+        case IL2CPP_TYPE_I2:
+        case IL2CPP_TYPE_I4:
+        case IL2CPP_TYPE_I8: {
+            int64_t value = 0;
+            il2cpp_field_get_value(attr_obj, field, &value);
+            return std::to_string(value);
+        }
+        case IL2CPP_TYPE_U:
+        case IL2CPP_TYPE_U1:
+        case IL2CPP_TYPE_U2:
+        case IL2CPP_TYPE_U4:
+        case IL2CPP_TYPE_U8: {
+            uint64_t value = 0;
+            il2cpp_field_get_value(attr_obj, field, &value);
+            return std::to_string(value);
+        }
+        case IL2CPP_TYPE_R4: {
+            float value = 0.0f;
+            il2cpp_field_get_value(attr_obj, field, &value);
+            return std::to_string(value);
+        }
+        case IL2CPP_TYPE_R8: {
+            double value = 0.0;
+            il2cpp_field_get_value(attr_obj, field, &value);
+            return std::to_string(value);
+        }
+        case IL2CPP_TYPE_CLASS: {
+            Il2CppObject* field_obj = il2cpp_field_get_value_object(field, attr_obj);
+
+            if (field_obj) {
+                Il2CppClass *object_class = il2cpp_object_get_class(field_obj);
+                result = il2cpp_class_get_name(object_class);
+
+                if(result == "Type" || result == "RuntimeType") {
+                    const MethodInfo* method_get_full_name = il2cpp_class_get_method_from_name(object_class, "get_FullName", 0);
+
+                    if (method_get_full_name) {
+                        auto* full_name_str = (Il2CppString*) il2cpp_runtime_invoke(method_get_full_name, field_obj, nullptr, nullptr);
+
+                        if (full_name_str) {
+                            uint16_t *u16_string = il2cpp_string_chars(full_name_str);
+                            return "typeof(" + remove_namespace(utf16_to_utf8(u16_string)) + ")";
+                        }
+                    }
+                    return "null";
+                } else {
+                    return result;
+                }
+            }
+            return "null";
+        }
+        case IL2CPP_TYPE_VALUETYPE: {
+            Il2CppClass* field_class = il2cpp_class_from_il2cpp_type(field_type);
+
+            if (il2cpp_class_is_enum(field_class)) {
+                int64_t value = 0;
+                il2cpp_field_get_value(attr_obj, field, &value);
+                return std::to_string(value);
+            } else {
+                return "valuetype(" + ((std::string)il2cpp_type_get_name(field_type)) + ")";
+            }
+        }
+        default:
+            return "field_type(" + ((std::string)il2cpp_type_get_name(field_type)) + ")";
+    }
+}
+
+// format attribute: 'xxx' or 'yyy(1,2)'
+std::string format_attributes(Il2CppObject* attr_obj) {
+    Il2CppClass* attr_class = il2cpp_object_get_class(attr_obj);
+    std::stringstream result;
+    std::vector<std::string> field_values;
+
+    result << il2cpp_class_get_name(attr_class);  // write attr name
+
+    void* iter = nullptr;
+    while (FieldInfo* field = il2cpp_class_get_fields(attr_class, &iter)) {
+        if (il2cpp_field_get_flags(field) & FIELD_ATTRIBUTE_STATIC) { continue; }  // skip static
+
+        field_values.push_back(get_attr_field_value_as_string(attr_obj, field));
+    }
+
+    if(!field_values.empty()) {
+        result << "(";
+        size_t field_values_size = field_values.size();
+        for (size_t i=0; i<field_values_size; i++) {
+            result << field_values[i] << (i == field_values_size - 1 ? "" : ", ");
+        }
+        result << ")";
+    }
+
+    return result.str();
+}
+
 
 std::string make_class_type_name(Il2CppClass *klass) {
     std::stringstream result;
@@ -293,157 +446,6 @@ std::string dump_field(Il2CppClass *klass) {
         outPut << "; // 0x" << std::hex << il2cpp_field_get_offset(field) << "\n";
     }
     return outPut.str();
-}
-
-// convert uint16_t array to utf-8 string
-std::string utf16_to_utf8(const uint16_t *utf16_str) {
-    std::u16string u16(reinterpret_cast<const char16_t *>(utf16_str));
-    std::string result;
-    result.reserve(u16.size());
-
-    for (char16_t c : u16) {
-        if (c == 0) break;
-        if (c <= 0x7F) {
-            result.push_back(static_cast<char>(c));
-        } else if (c <= 0x7FF) {
-            result.push_back(0xC0 | ((c >> 6) & 0x1F));
-            result.push_back(0x80 | (c & 0x3F));
-        } else {
-            result.push_back(0xE0 | ((c >> 12) & 0x0F));
-            result.push_back(0x80 | ((c >> 6) & 0x3F));
-            result.push_back(0x80 | (c & 0x3F));
-        }
-    }
-
-    return result;
-}
-
-// remove namespace:  xxx.yyy.MyClass -> MyClass
-std::string remove_namespace(const std::string& full_name) {
-    size_t last_dot_pos = full_name.find_last_of('.');
-    if (last_dot_pos != std::string::npos) {
-        return full_name.substr(last_dot_pos + 1);
-    }
-    return full_name;
-}
-
-// get field value as string
-std::string get_attr_field_value_as_string(Il2CppObject* attr_obj, FieldInfo* field) {
-    const Il2CppType* field_type = il2cpp_field_get_type(field);
-    auto type_enum = (Il2CppTypeEnum) il2cpp_type_get_type(field_type);
-    std::string result;
-
-    switch (type_enum) {
-        case IL2CPP_TYPE_BOOLEAN: {
-            bool value = false;
-            il2cpp_field_get_value(attr_obj, field, &value);
-            return value ? "true" : "false";
-        }
-        case IL2CPP_TYPE_CHAR:
-        case IL2CPP_TYPE_STRING: {
-            auto *str_obj = (Il2CppString *) il2cpp_field_get_value_object(field, attr_obj);
-
-            if (str_obj) {
-                uint16_t *u16_string = il2cpp_string_chars(str_obj);
-                return '"' + utf16_to_utf8(u16_string) + '"';
-            } else {
-                return "null";
-            }
-        }
-        case IL2CPP_TYPE_I:
-        case IL2CPP_TYPE_I1:
-        case IL2CPP_TYPE_I2:
-        case IL2CPP_TYPE_I4:
-        case IL2CPP_TYPE_I8: {
-            int64_t value = 0;
-            il2cpp_field_get_value(attr_obj, field, &value);
-            return std::to_string(value);
-        }
-        case IL2CPP_TYPE_U:
-        case IL2CPP_TYPE_U1:
-        case IL2CPP_TYPE_U2:
-        case IL2CPP_TYPE_U4:
-        case IL2CPP_TYPE_U8: {
-            uint64_t value = 0;
-            il2cpp_field_get_value(attr_obj, field, &value);
-            return std::to_string(value);
-        }
-        case IL2CPP_TYPE_R4: {
-            float value = 0.0f;
-            il2cpp_field_get_value(attr_obj, field, &value);
-            return std::to_string(value);
-        }
-        case IL2CPP_TYPE_R8: {
-            double value = 0.0;
-            il2cpp_field_get_value(attr_obj, field, &value);
-            return std::to_string(value);
-        }
-        case IL2CPP_TYPE_CLASS: {
-            Il2CppObject* field_obj = il2cpp_field_get_value_object(field, attr_obj);
-
-            if (field_obj) {
-                Il2CppClass *object_class = il2cpp_object_get_class(field_obj);
-                result = il2cpp_class_get_name(object_class);
-
-                if(result == "Type" || result == "RuntimeType") {
-                    const MethodInfo* method_get_full_name = il2cpp_class_get_method_from_name(object_class, "get_FullName", 0);
-
-                    if (method_get_full_name) {
-                        auto* full_name_str = (Il2CppString*) il2cpp_runtime_invoke(method_get_full_name, field_obj, nullptr, nullptr);
-
-                        if (full_name_str) {
-                            uint16_t *u16_string = il2cpp_string_chars(full_name_str);
-                            return "typeof(" + remove_namespace(utf16_to_utf8(u16_string)) + ")";
-                        }
-                    }
-                    return "null";
-                } else {
-                    return result;
-                }
-            }
-            return "null";
-        }
-        case IL2CPP_TYPE_VALUETYPE: {
-            Il2CppClass* field_class = il2cpp_class_from_il2cpp_type(field_type);
-
-            if (il2cpp_class_is_enum(field_class)) {
-                int64_t value = 0;
-                il2cpp_field_get_value(attr_obj, field, &value);
-                return std::to_string(value);
-            } else {
-                return "valuetype(" + ((std::string)il2cpp_type_get_name(field_type)) + ")";
-            }
-        }
-        default:
-            return "field_type(" + ((std::string)il2cpp_type_get_name(field_type)) + ")";
-    }
-}
-
-// format attribute: 'xxx' or 'yyy(1,2)'
-std::string format_attributes(Il2CppObject* attr_obj) {
-    Il2CppClass* attr_class = il2cpp_object_get_class(attr_obj);
-    std::stringstream result;
-    std::vector<std::string> field_values;
-
-    result << il2cpp_class_get_name(attr_class);  // write attr name
-
-    void* iter = nullptr;
-    while (FieldInfo* field = il2cpp_class_get_fields(attr_class, &iter)) {
-        if (il2cpp_field_get_flags(field) & FIELD_ATTRIBUTE_STATIC) { continue; }  // skip static
-
-        field_values.push_back(get_attr_field_value_as_string(attr_obj, field));
-    }
-
-    if(!field_values.empty()) {
-        result << "(";
-        size_t field_values_size = field_values.size();
-        for (size_t i=0; i<field_values_size; i++) {
-            result << field_values[i] << (i == field_values_size - 1 ? "" : ", ");
-        }
-        result << ")";
-    }
-
-    return result.str();
 }
 
 std::string dump_type(const Il2CppType *type) {
